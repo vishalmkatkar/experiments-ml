@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Anomalies Are Not Failures</title>
+<meta name="description" content="Part 1 of a six-part series on fleet anomaly detection: why an anomaly is not a failure, and an architecture that goes from unsupervised detection to diagnosis and service recommendation with Spark and MLflow.">
+<meta property="og:title" content="Anomalies Are Not Failures">
+<meta property="og:description" content="Part 1 of a six-part series on fleet anomaly detection: why an anomaly is not a failure, and an architecture that goes from unsupervised detection to diagnosis and service recommendation with Spark and MLflow.">
+<meta property="og:type" content="article">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=Public+Sans:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: 68ch article column; diagram, tables, code and chart break out to a wider measure; sticky TOC rail on wide screens, collapsible TOC on narrow */
+:root {
+  --paper: #f7f8fa;
+  --ink: #18202e;
+  --graphite: #576173;
+  --rule: #d9dee6;
+  --panel: #ffffff;
+  --accent: #0e6b70;
+  --accent-soft: #dceeed;
+  --code-bg: #1d2431;
+  --code-fg: #dbe2ee;
+  --code-c: #8893a6; --code-k: #f0a37a; --code-s: #9fd8a8; --code-f: #8fb8ff;
+  --ok: #1f7a4d; --ok-soft: #e2f2e9;
+  --warn: #92600a; --warn-soft: #f8eed8;
+  --stop: #b0322b; --stop-soft: #f8e3e1;
+  --f-display: "Newsreader", "Source Serif Pro", Georgia, serif;
+  --f-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161e; --ink: #e3e7ee; --graphite: #9ba5b6; --rule: #2a313d; --panel: #1a1f29;
+    --accent: #5cc3c4; --accent-soft: #143032;
+    --code-bg: #0d1118; --code-fg: #d6deea;
+    --ok: #74d3a3; --ok-soft: #16301f; --warn: #eec06a; --warn-soft: #362a12; --stop: #f08f86; --stop-soft: #3a1d1b;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161e; --ink: #e3e7ee; --graphite: #9ba5b6; --rule: #2a313d; --panel: #1a1f29;
+  --accent: #5cc3c4; --accent-soft: #143032;
+  --code-bg: #0d1118; --code-fg: #d6deea;
+  --ok: #74d3a3; --ok-soft: #16301f; --warn: #eec06a; --warn-soft: #362a12; --stop: #f08f86; --stop-soft: #3a1d1b;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; }
+img { max-width: 100%; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  background: var(--paper); color: var(--ink);
+  font-family: var(--f-body); font-size: 17px; line-height: 1.7;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 48px 96px;
+}
+.layout { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; }
+@media (min-width: 1100px) { .layout { grid-template-columns: 220px minmax(0, 1fr); gap: 56px; } }
+
+/* TOC */
+.toc { font-size: 0.86rem; min-width: 0; }
+@media (min-width: 1100px) { .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 32px); align-self: start; } }
+.toc summary { cursor: pointer; font-family: var(--f-mono); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--graphite); padding: 6px 0; }
+.toc summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.toc ol { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; border-left: 1px solid var(--rule); }
+.toc a { display: block; padding: 4px 0 4px 14px; color: var(--graphite); text-decoration: none; line-height: 1.4; margin-left: -1px; border-left: 2px solid transparent; }
+.toc a:hover, .toc a:focus-visible { color: var(--ink); border-left-color: var(--accent); outline: none; }
+
+article { min-width: 0; display: flex; flex-direction: column; gap: 22px; max-width: 760px; }
+article > p, article > ul, article > ol, article > h2, article > h3, article > .aside, article > blockquote { max-width: 68ch; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; color: var(--ink); }
+h1 { font-weight: 600; font-size: clamp(2.3rem, 6vw, 3.4rem); line-height: 1.05; letter-spacing: -0.015em; }
+h2 { font-weight: 600; font-size: 1.85rem; line-height: 1.2; margin-top: 34px; scroll-margin-top: 24px; }
+h3 { font-weight: 600; font-size: 1.3rem; line-height: 1.3; margin-top: 12px; scroll-margin-top: 24px; }
+h3 .stage-n { font-family: var(--f-mono); font-size: 0.8rem; font-weight: 500; color: var(--accent); margin-right: 8px; vertical-align: 2px; }
+p, li { margin: 0; }
+ul, ol { padding-left: 22px; display: flex; flex-direction: column; gap: 6px; margin: 0; }
+a { color: var(--accent); text-underline-offset: 3px; }
+strong { font-weight: 600; }
+code { font-family: var(--f-mono); font-size: 0.84em; background: var(--accent-soft); color: var(--ink); padding: 1px 5px; border-radius: 4px; }
+
+.hero { display: flex; flex-direction: column; gap: 16px; padding-bottom: 26px; border-bottom: 1px solid var(--rule); }
+.kicker { font-family: var(--f-mono); font-size: 0.76rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
+.dek { font-family: var(--f-display); font-style: italic; font-size: 1.35rem; line-height: 1.45; color: var(--graphite); max-width: 60ch; }
+.byline { font-size: 0.85rem; color: var(--graphite); display: flex; flex-wrap: wrap; gap: 4px 14px; font-variant-numeric: tabular-nums; }
+.lead::first-letter { font-family: var(--f-display); float: left; font-size: 3.6em; line-height: 0.85; padding: 6px 10px 0 0; color: var(--accent); font-weight: 600; }
+
+blockquote { margin: 10px 0; padding: 0 0 0 22px; border-left: 3px solid var(--accent); font-family: var(--f-display); font-size: 1.5rem; line-height: 1.4; font-style: italic; }
+.aside { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 16px 20px; display: flex; flex-direction: column; gap: 6px; font-size: 0.95rem; }
+.aside .label { font-family: var(--f-mono); font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+
+figure { margin: 6px 0; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+figcaption { font-size: 0.84rem; color: var(--graphite); max-width: 68ch; }
+.frame { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 18px; overflow-x: auto; }
+.frame pre.mermaid { margin: 0; min-width: 620px; background: transparent; text-align: center; }
+pre.ascii { margin: 0; font-family: var(--f-mono); font-size: 0.72rem; line-height: 1.35; color: var(--graphite); }
+
+.code { position: relative; background: var(--code-bg); border-radius: 8px; min-width: 0; }
+.code .lang { position: absolute; top: 8px; left: 14px; font-family: var(--f-mono); font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--code-c); }
+.code button { position: absolute; top: 6px; right: 8px; font-family: var(--f-mono); font-size: 0.72rem; background: transparent; color: var(--code-fg); border: 1px solid var(--code-c); border-radius: 5px; padding: 3px 9px; cursor: pointer; }
+.code button:hover, .code button:focus-visible { border-color: var(--code-fg); outline: none; }
+.code pre { margin: 0; padding: 36px 18px 18px; overflow-x: auto; font-family: var(--f-mono); font-size: 0.8rem; line-height: 1.6; color: var(--code-fg); }
+.c { color: var(--code-c); font-style: italic; } .k { color: var(--code-k); } .s { color: var(--code-s); } .f { color: var(--code-f); }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 0.88rem; line-height: 1.5; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+th { font-family: var(--f-mono); font-size: 0.7rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--graphite); }
+tr:last-child td { border-bottom: none; }
+td.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 0.82rem; }
+.pill { display: inline-block; font-family: var(--f-mono); font-size: 0.7rem; padding: 1px 8px; border-radius: 99px; white-space: nowrap; }
+.pill.ok { background: var(--ok-soft); color: var(--ok); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.stop { background: var(--stop-soft); color: var(--stop); }
+
+.failures { list-style: none; padding: 0; counter-reset: f; gap: 18px; }
+.failures li { counter-increment: f; display: grid; grid-template-columns: 34px 1fr; gap: 0 12px; }
+.failures li::before { content: counter(f); font-family: var(--f-display); font-size: 1.5rem; font-weight: 600; color: var(--accent); line-height: 1.2; }
+.failures li > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+
+.principles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px 24px; }
+.principles div { border-top: 1px solid var(--ink); padding-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+.principles strong { font-family: var(--f-display); font-size: 1.15rem; }
+.principles span { font-size: 0.92rem; color: var(--graphite); line-height: 1.55; }
+
+.chart svg { width: 100%; height: auto; display: block; min-width: 520px; }
+.chart .lbl { fill: var(--ink); font-family: var(--f-body); font-size: 13px; }
+.chart .tick { fill: var(--graphite); font-family: var(--f-mono); font-size: 11px; }
+.chart .val { fill: var(--ink); font-family: var(--f-mono); font-size: 12px; font-weight: 500; }
+.chart .grid { stroke: var(--rule); stroke-width: 1; }
+.chart .bar { fill: var(--accent); }
+.chart .bar.naive { fill: var(--stop); opacity: 0.75; }
+
+.options { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.option { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; min-width: 0; }
+.option.pick { border-color: var(--accent); }
+.option h4 { margin: 0; font-family: var(--f-display); font-size: 1.1rem; font-weight: 600; }
+.option p { color: var(--graphite); }
+
+.checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px 28px; }
+.checks div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.checks h4 { margin: 0; font-family: var(--f-mono); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); font-weight: 500; }
+.checks ul { list-style: none; padding: 0; font-size: 0.9rem; gap: 5px; }
+.checks li { padding-left: 20px; position: relative; line-height: 1.5; }
+.checks li::before { content: ""; position: absolute; left: 0; top: 0.38em; width: 10px; height: 10px; border: 1.5px solid var(--graphite); border-radius: 2px; }
+
+.endnote { border-top: 1px solid var(--rule); padding-top: 20px; font-size: 0.9rem; color: var(--graphite); }
+@media (max-width: 560px) {
+  body { font-size: 16px; }
+  h2 { font-size: 1.55rem; }
+  blockquote { font-size: 1.25rem; }
+}
+
+/* Print / PDF */
+@page { size: A4; margin: 16mm 15mm 18mm; }
+@media print {
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { background: #ffffff; }
+  body { padding: 0; font-size: 10.5pt; line-height: 1.6; }
+  .layout { display: block; max-width: none; }
+  .toc, .code button { display: none; }
+  article { max-width: none; gap: 14px; }
+  article > p, article > ul, article > ol, article > h2, article > h3, article > .aside, article > blockquote { max-width: none; }
+  h1 { font-size: 30pt; }
+  h2 { font-size: 17pt; margin-top: 18px; break-after: avoid; }
+  h3 { font-size: 13pt; break-after: avoid; }
+  .dek { font-size: 13pt; }
+  blockquote { font-size: 14pt; }
+  .frame, .table-wrap { overflow: visible; }
+  table, .frame pre.mermaid, .chart svg { min-width: 0; }
+  table { font-size: 8.5pt; }
+  .frame pre.mermaid svg { max-width: 100% !important; max-height: 200mm; width: auto; height: auto; }
+  .code pre { overflow: visible; white-space: pre-wrap; word-break: break-word; font-size: 7.8pt; padding-top: 28px; }
+  figure, .code, .table-wrap, .aside, .option, .failures li, tr, blockquote, .principles div, .checks div { break-inside: avoid; }
+  p { orphans: 3; widows: 3; }
+  a { color: inherit; text-decoration: none; }
+}
+</style>
+
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc" aria-label="Contents">
+  <details id="toc-details" open>
+    <summary>Contents</summary>
+    <ol>
+      <li><a href="#problem">The problem</a></li>
+      <li><a href="#questions">Three questions, three kinds of evidence</a></li>
+      <li><a href="#data">The data</a></li>
+      <li><a href="#pipeline">The pipeline</a></li>
+      <li><a href="#episode">The episode record</a></li>
+      <li><a href="#scale">Spark and MLflow</a></li>
+      <li><a href="#llm">Where the LLM fits</a></li>
+      <li><a href="#measure">How it will be measured</a></li>
+      <li><a href="#bench">The test bench</a></li>
+      <li><a href="#series">The series</a></li>
+    </ol>
+  </details>
+</nav>
+
+<article>
+
+<header class="hero">
+  <span class="kicker">Fleet anomaly detection · Part 1 of 6</span>
+  <h1>Anomalies Are Not Failures</h1>
+  <p class="dek">Unsupervised models find unusual behavior. Logs and service history turn it into a diagnosis and a service action. An architecture for doing both across a fleet of machines.</p>
+  <div class="byline"><span>12 min read</span><span>For ML and data engineers building predictive maintenance</span></div>
+</header>
+
+<p class="lead">Most anomaly detection projects end at a score. A model learns what normal sensor readings look like, flags what doesn't fit, and sends an alert. Then someone on the maintenance team opens it and has to answer three questions the model never asked: is this a real problem, what is going wrong, and what should we do about it? When the answer to the first question is "no" too often, people stop opening the alerts.</p>
+
+<p>This series builds the rest of that path. It starts with unsupervised detection on sensor telemetry, links what it finds to error logs and failure events, and ends with a recommended service action drawn from what fixed similar cases before. It runs on Apache Spark, tracks models in MLflow, and every part ships with runnable reference code on a synthetic fleet whose ground truth lets each claim be measured.</p>
+
+<p>This first part covers the design: the problem, the data, the pipeline, where each tool fits, and how the results will be judged. The later parts take one stage each.</p>
+
+<h2 id="problem">The problem</h2>
+
+<p>Three facts about industrial fleets shape everything below.</p>
+
+<ol class="failures">
+  <li><div><strong>Most alerts are mode changes.</strong><p>A compressor at peak load runs hotter and vibrates more than the same compressor idling. A machine starting up looks nothing like one in steady state. A detector that learns one fleet-wide "normal" flags every startup, every peak shift and every machine that simply runs harder than average. These alerts are correct about the statistics and useless to the people who receive them.</p></div></li>
+  <li><div><strong>Failures are rare and badly labelled.</strong><p>A well-run fleet sees a handful of real failures per machine per year, often fewer. That is too few to train a classifier per failure mode, and the labels that exist are noisy: the failure date is when someone logged it, not when the fault began. This is why the detection itself has to be unsupervised.</p></div></li>
+  <li><div><strong>What fixed the problem is buried in free text.</strong><p>Service records hold the most useful history in the business: what the technician found, what they replaced, and whether the machine came back a week later. Most of it is typed into a notes field, in different words by different people.</p></div></li>
+</ol>
+
+<blockquote>An anomaly answers "is this unusual?" A failure answers "what is breaking?" A service action answers "what should we do?" They need different evidence.</blockquote>
+
+<h2 id="questions">Three questions, three kinds of evidence</h2>
+
+<p>The architecture follows from keeping those questions apart. Each one is answered by a different technique, from a different data source, and each can be wrong in its own way.</p>
+
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Question</th><th>Evidence</th><th>Technique</th><th>Typical mistake</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Is this unusual?</strong></td><td>Sensor telemetry, compared with the same kind of machine in the same operating mode</td><td>Clustering for profiles and modes; robust statistics, Isolation Forest and forecast residuals for detection</td><td>Flagging a normal mode change as an anomaly</td></tr>
+      <tr><td><strong>What is going wrong?</strong></td><td>Error codes, failure events and past episodes with known outcomes</td><td>Correlation, time-window joins, association rules, nearest-neighbor matching on episode signatures</td><td>Naming a failure mode on an episode that never led to one</td></tr>
+      <tr><td><strong>What should we do?</strong></td><td>Service records: actions taken, parts used, whether the fix held</td><td>Case similarity, collaborative filtering, ranking by first-time fix rate</td><td>Recommending the action tried most often instead of the one that worked</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>A system that answers only the first question is a monitoring tool. A system that answers all three, and says how confident it is in each answer, is something a maintenance planner can act on.</p>
+
+<h2 id="data">The data</h2>
+
+<p>Five sources, at very different grains. Telemetry is dense and regular. Everything else is sparse, irregular and recorded by people or by controllers with their own idea of time.</p>
+
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Source</th><th>Grain</th><th>Key fields</th><th>Shape</th><th>Used in</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Telemetry</strong></td><td>Machine × hour</td><td><code>machine_id</code>, <code>ts</code>, six sensors such as vibration, temperature, pressure and motor current</td><td>Dense. The test fleet: about 200 machines × 8,760 hours ≈ 1.75 million rows</td><td>Parts 2–5</td></tr>
+      <tr><td><strong>Error logs</strong></td><td>Event</td><td><code>machine_id</code>, <code>ts</code>, <code>code</code>, <code>severity</code></td><td>Sparse and noisy. Many codes have nothing to do with failures</td><td>Parts 4–5</td></tr>
+      <tr><td><strong>Failure events</strong></td><td>Event</td><td><code>machine_id</code>, <code>ts</code>, <code>component</code>, <code>failure_mode</code></td><td>Rare. Timestamped when logged, not when the fault began</td><td>Parts 4–5</td></tr>
+      <tr><td><strong>Service records</strong></td><td>Visit</td><td><code>machine_id</code>, <code>ts</code>, free-text note, action, parts, whether the fix held</td><td>Sparse, mostly free text</td><td>Parts 5–6</td></tr>
+      <tr><td><strong>Machine metadata</strong></td><td>Machine</td><td><code>model</code>, <code>site</code>, <code>install_date</code>, rated capacity</td><td>Small and slowly changing</td><td>Part 2</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>The join keys look simple, <code>machine_id</code> and time, but time is where these sources disagree. A failure logged at 09:00 on Tuesday may have started on Sunday night. So the pipeline never joins on exact timestamps. It joins anomaly episodes to events within windows, and Part 4 measures how wide those windows need to be for each failure mode.</p>
+
+<h2 id="pipeline">The pipeline</h2>
+
+<p>Five stages, each with one job, connected by a feedback loop from the technicians who act on the output.</p>
+
+<figure>
+  <div class="frame">
+<pre class="mermaid">flowchart LR
+  T[Telemetry]:::src --> P
+  M[Machine metadata]:::src --> P
+  P[1 Profile<br/>machines and modes] --> D[2 Detect<br/>per profile and mode]
+  D --> C[3 Correlate<br/>sensor structure and logs]
+  L[Error logs and<br/>failure events]:::src --> C
+  C --> G[4 Diagnose<br/>similar past episodes]
+  S[Service records]:::src --> G
+  S --> R
+  G --> R[5 Recommend<br/>what fixed similar cases]
+  R --> W[Work order<br/>LLM draft, cited cases]
+  W --> F[Technician<br/>confirms or rejects]
+  F -. labels .-> C
+  F -. labels .-> G
+  F -. outcomes .-> R
+  classDef src stroke-dasharray: 4 3</pre>
+  </div>
+  <figcaption>Figure 1. Telemetry feeds profiling and detection, logs join at Correlate, and service records feed diagnosis and recommendation. Technician feedback flows back as labels and outcomes.</figcaption>
+</figure>
+
+<h3 id="s-profile"><span class="stage-n">1</span>Profile: define normal per kind of machine and per mode</h3>
+
+<p>Before anything can be called abnormal, the system needs to know what normal is for this machine, right now. Two clustering steps provide that. The first groups machines into <em>profiles</em> from summary features: typical sensor levels, variability, duty cycle and how the sensors move together. Machines of the same nominal model often end up in different profiles because they do different work. The second step clusters time windows within each profile into <em>operating modes</em> such as idle, normal load, peak and startup.</p>
+
+<p>k-means and Gaussian mixtures do the grouping. HDBSCAN plays a different role: it leaves points that fit no cluster unassigned, which is how the pipeline finds machines that match no profile at all. Those go to a person, not to the detector. Part 2 covers how to choose the number of clusters (silhouette score plus stability across resampled fleets) and what to do when a machine changes profile after a service visit.</p>
+
+<h3 id="s-detect"><span class="stage-n">2</span>Detect: score against the right baseline, alert on episodes</h3>
+
+<p>Detection runs per profile and per mode. The baseline is deliberately simple: a robust z-score per sensor, using the median and the median absolute deviation of that profile and mode, so a few extreme readings in the history don't stretch the definition of normal.</p>
+
+<div class="code"><span class="lang">python · sketch</span><button type="button" data-copy>Copy</button>
+<pre><span class="k">def</span> <span class="f">robust_z</span>(df, sensors):
+    <span class="c"># Normal is defined per profile and operating mode, never fleet-wide.</span>
+    keys = [df[<span class="s">"profile"</span>], df[<span class="s">"mode"</span>]]
+    median = df[sensors].groupby(keys).transform(<span class="s">"median"</span>)
+    mad = (df[sensors] - median).abs().groupby(keys).transform(<span class="s">"median"</span>)
+    <span class="k">return</span> (df[sensors] - median) / (<span class="s">1.4826</span> * mad + <span class="s">1e-9</span>)</pre>
+</div>
+
+<p>On top of that baseline sit two models that see what a per-sensor score cannot. Isolation Forest, one per profile, catches unusual <em>combinations</em> of values that are each normal on their own. Forecast residuals catch unusual <em>sequences</em>: a temperature that should have fallen after a load drop and didn't.</p>
+
+<p>Two rules then turn scores into alerts. Scores are calibrated per machine, as percentiles of that machine's own history, so one noisy machine cannot flood the queue. And alerts are raised on <em>episodes</em>, not points: consecutive anomalous windows are merged, an episode must last a minimum time, and a cool-down stops the same episode from alerting twice. Part 3 builds all of this and measures how many alerts mode-aware baselines remove.</p>
+
+<h3 id="s-correlate"><span class="stage-n">3</span>Correlate: relationships, then logs</h3>
+
+<p>Correlation does two separate jobs here. The first is a second detection signal. Sensors on a healthy machine move together in stable ways: motor current tracks load, temperature follows current with a lag. Slow degradation often shows up as those relationships weakening while every individual value still sits inside its normal range. A <em>correlation-break score</em> measures how far a machine's recent correlation matrix has drifted from its profile's normal one.</p>
+
+<p>The second job is giving an anomaly meaning. Episodes are joined to error codes and failure events that follow within a time window, and association rules over those joins show which episode types and codes tend to precede which failures, with support, confidence and lift. The same joins produce the <em>lead time</em> for each failure mode: how many days before a failure its warning signs appear. That number decides how urgent an alert is, and it also produces the weak labels Part 5 trains on.</p>
+
+<h3 id="s-diagnose"><span class="stage-n">4</span>Diagnose: which past episodes does this one resemble?</h3>
+
+<p>With too few failures to train a classifier per failure mode, diagnosis works by similarity. Each episode gets a <em>signature</em>: which sensors deviated and in which direction, the shape of the deviation over time, which correlations broke, and which error codes appeared alongside it. A new episode is compared with past episodes whose outcome is known. If its nearest neighbors mostly ended in bearing failures, the likely mode is a bearing failure, and the share of neighbors that agree is the confidence.</p>
+
+<p>This approach has a useful property: every diagnosis comes with its evidence, the specific past episodes it matched. Part 5 also trains a supervised model on the weak labels from Part 4 and compares the two honestly, using time-based splits only.</p>
+
+<h3 id="s-recommend"><span class="stage-n">5</span>Recommend: what fixed similar cases, not what was tried most</h3>
+
+<p>The last stage ranks service actions. A naive recommender suggests whatever technicians did most often for this failure mode, which reproduces existing habits, including the bad ones. This one blends three signals: similarity to past cases, collaborative filtering (ALS) over machines and actions with fix outcomes as feedback, and a ranking weighted by <em>first-time fix rate</em>, so an action that usually needed a second visit within 30 days ranks below one that held.</p>
+
+<p>The output is a short ranked list with the past cases behind each entry. Technicians confirm or reject it, and that feedback becomes new labels for correlation and diagnosis and new outcomes for the recommender. That loop is what lets the system improve without anyone running a labelling project.</p>
+
+<h2 id="episode">The episode record</h2>
+
+<p>The stages communicate through one object: the episode. Detection creates it, each later stage adds to it, and it is what a person finally reads. Defining it up front keeps the stages independent and makes every decision traceable back to the readings that caused it.</p>
+
+<div class="code"><span class="lang">jsonc · illustrative</span><button type="button" data-copy>Copy</button>
+<pre>{
+  <span class="s">"episode_id"</span>: <span class="s">"ep-0412"</span>,
+  <span class="s">"machine_id"</span>: <span class="s">"M-117"</span>,
+  <span class="s">"profile"</span>: <span class="s">"P2"</span>, <span class="s">"mode"</span>: <span class="s">"normal_load"</span>,
+  <span class="s">"start"</span>: <span class="s">"2026-03-04T02:00"</span>, <span class="s">"end"</span>: <span class="s">"2026-03-06T19:00"</span>,
+  <span class="c">// Detect</span>
+  <span class="s">"score_pct"</span>: <span class="s">0.997</span>,
+  <span class="s">"deviations"</span>: {<span class="s">"vibration"</span>: <span class="s">"+4.1 MAD, rising"</span>, <span class="s">"temperature"</span>: <span class="s">"+2.3 MAD"</span>},
+  <span class="c">// Correlate</span>
+  <span class="s">"broken_pairs"</span>: [[<span class="s">"current"</span>, <span class="s">"temperature"</span>]],
+  <span class="s">"codes"</span>: [<span class="s">"E214"</span>, <span class="s">"E214"</span>, <span class="s">"E031"</span>],
+  <span class="c">// Diagnose</span>
+  <span class="s">"likely_mode"</span>: <span class="s">"bearing_wear"</span>, <span class="s">"confidence"</span>: <span class="s">0.7</span>,
+  <span class="s">"similar_episodes"</span>: [<span class="s">"ep-0087"</span>, <span class="s">"ep-0233"</span>, <span class="s">"ep-0301"</span>],
+  <span class="s">"typical_lead_days"</span>: <span class="s">9</span>,
+  <span class="c">// Recommend</span>
+  <span class="s">"actions"</span>: [
+    {<span class="s">"action"</span>: <span class="s">"replace_bearing"</span>, <span class="s">"first_time_fix"</span>: <span class="s">0.86</span>, <span class="s">"cases"</span>: [<span class="s">"sv-1190"</span>, <span class="s">"sv-1342"</span>]},
+    {<span class="s">"action"</span>: <span class="s">"lubricate_and_recheck"</span>, <span class="s">"first_time_fix"</span>: <span class="s">0.41</span>, <span class="s">"cases"</span>: [<span class="s">"sv-0977"</span>]}
+  ]
+}</pre>
+</div>
+
+<p>The values above are made up to show the shape. Every field after <code>deviations</code> is optional: an episode with no matching history stops at "unusual, no known cause", and the record says so instead of guessing.</p>
+
+<h2 id="scale">Spark and MLflow</h2>
+
+<p>The fleet is large in one dimension (telemetry) and small in all the others. That decides where Spark earns its place. It does the fleet-wide window features, the per-profile training, the time-window joins against logs, and the two algorithms MLlib provides directly: ALS for recommendation and FP-Growth for association rules. The models themselves are mostly scikit-learn, trained inside Spark groups.</p>
+
+<div class="code"><span class="lang">python · sketch</span><button type="button" data-copy>Copy</button>
+<pre><span class="k">def</span> <span class="f">fit_profile</span>(pdf: pd.DataFrame) -> pd.DataFrame:
+    <span class="c"># Runs once per profile, in parallel across the cluster.</span>
+    model = IsolationForest(n_estimators=<span class="s">200</span>, random_state=<span class="s">0</span>).fit(pdf[FEATURES])
+    <span class="k">return</span> pd.DataFrame({<span class="s">"profile"</span>: [pdf[<span class="s">"profile"</span>].iloc[<span class="s">0</span>]],
+                         <span class="s">"model"</span>: [pickle.dumps(model)], <span class="s">"rows"</span>: [len(pdf)]})
+
+fitted = (windows.groupBy(<span class="s">"profile"</span>)
+          .applyInPandas(fit_profile, schema=<span class="s">"profile string, model binary, rows long"</span>))</pre>
+</div>
+
+<p>MLflow tracks every clustering setup and detector as a run, with its metrics and evaluation report as artifacts. The per-profile detectors are registered as one model behind a single scoring wrapper that routes each window to its profile's detector, so the rest of the pipeline sees one model. Aliases manage promotion: scoring always loads <code>models:/fleet-detector@champion</code>, a new version is registered as <code>challenger</code>, and it is promoted only after it beats the champion on the measures below.</p>
+
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Work</th><th>Cadence</th><th>Mode</th></tr></thead>
+    <tbody>
+      <tr><td>Window features</td><td>Each new hour or day of telemetry</td><td>Batch; Structured Streaming is an option</td></tr>
+      <tr><td>Profile and mode clustering</td><td>Monthly, or when the fleet changes</td><td>Batch</td></tr>
+      <tr><td>Detection scoring and episodes</td><td>Each new window</td><td>Batch; streaming is an option</td></tr>
+      <tr><td>Correlation baselines, association rules, lead times</td><td>Weekly</td><td>Batch</td></tr>
+      <tr><td>Diagnosis and recommendation</td><td>Per episode</td><td>On demand</td></tr>
+      <tr><td>ALS and detector retraining</td><td>Weekly, champion vs challenger</td><td>Batch</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>Everything in this series runs on one laptop, with Spark in local mode. The code is the same code a cluster would run, and the test fleet is sized so Spark does real work. The posts will say plainly where it ran.</p>
+
+<h2 id="llm">Where the LLM fits</h2>
+
+<p>After two posts about LLM systems, this one gives the LLM a deliberately small role.</p>
+
+<div class="options">
+  <div class="option"><h4>No LLM</h4><p>Profiling, detection, correlation, diagnosis and ranking. These are numeric problems with good statistical tools, and they need to be fast, cheap, repeatable and explainable. An LLM adds none of that.</p></div>
+  <div class="option pick"><h4>LLM</h4><p>Reading free-text service notes into a consistent failure mode, action and parts list. Drafting the work order from the episode record, citing the past cases it used, the same pattern as the citations in the RAG post.</p></div>
+</div>
+
+<p>The LLM works on text that people wrote and text that people will read. It never decides whether a machine is behaving abnormally, and it can't invent a recommendation: it only writes up what the ranking stage produced.</p>
+
+<h2 id="measure">How it will be measured</h2>
+
+<p>Anomaly detection is easy to make look good. Point-wise accuracy is near 100% for a model that never alerts, because almost every hour is normal. The widely used <em>point-adjusted</em> F1 is worse: if any point inside a true anomaly segment is flagged, every point in that segment counts as detected, and on long segments even random scores can reach a high F1 (Kim et al., AAAI 2022). Neither tells a maintenance team anything.</p>
+
+<p>This series reports four measures instead, each tied to a decision someone makes:</p>
+
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Measure</th><th>Definition</th><th>The question it answers</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Precision within an alert budget</strong></td><td>Fix how many alerts the team can handle per week; of the top-ranked episodes within that budget, the share that were real</td><td>Is the team's time well spent?</td></tr>
+      <tr><td><strong>Event recall</strong></td><td>Share of failures with at least one alert in a window before the failure; alerts after the failure don't count</td><td>How many failures did we see coming?</td></tr>
+      <tr><td><strong>Lead time</strong></td><td>Median time between the first correct alert and the failure, per failure mode</td><td>Is there time to plan the repair?</td></tr>
+      <tr><td><strong>First-time fix rate</strong></td><td>Share of recommended actions where the fix held, with no repeat visit within 30 days</td><td>Did the recommendation work?</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="aside"><span class="label">Leakage traps</span><p>Two mistakes inflate every result in this field. Random train and test splits let a model learn from the future, so every split here is by time. And features that encode a maintenance visit (a reset counter, a sudden drop in vibration after new parts) let a model "predict" the repair that already happened. Those features are kept out of training.</p></div>
+
+<h2 id="bench">The test bench</h2>
+
+<p>Every measure above needs ground truth, and real fleets don't come with it. So the reference code starts with a generator for a synthetic fleet that does:</p>
+
+<ul>
+  <li>About 200 machines in four hidden profiles, with hourly readings from six sensors for one year.</li>
+  <li>Operating modes that shift by schedule and load.</li>
+  <li>Four failure modes, each with its own signature: which sensors drift, which relationships break, and a typical lead time.</li>
+  <li>Sudden faults alongside slow degradation.</li>
+  <li>Noisy error logs, and service records with free-text notes, actions, parts and whether the fix held.</li>
+  <li>A ground-truth file with the true profiles, anomaly windows, failure causes and the correct action for each case.</li>
+</ul>
+
+<p>Synthetic data flatters results, so each part states that limit and adds realistic noise, and the pipeline will also be checked on a public predictive-maintenance dataset with real telemetry, errors, maintenance and failures. The measured numbers start in Part 2.</p>
+
+<h2 id="series">The series</h2>
+
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Part</th><th>Title</th><th>The claim it tests</th><th>Code</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td>Anomalies are not failures</td><td>This post: the architecture and how it will be judged</td><td>–</td></tr>
+      <tr><td class="num">2</td><td>Machine and sensor profiles</td><td>Most false alarms are mode changes, so normal must be defined per profile and mode</td><td><code>profiles</code></td></tr>
+      <tr><td class="num">3</td><td>Anomaly detection at scale</td><td>Per-profile detectors, per-machine calibration and episodes cut alerts without losing real ones</td><td><code>detect</code></td></tr>
+      <tr><td class="num">4</td><td>Correlation</td><td>Sensor relationships break before values do, and logs give anomalies a lead time</td><td><code>correlate</code></td></tr>
+      <tr><td class="num">5</td><td>Failure detection from weak labels</td><td>Similar past episodes name the failure mode, judged by events and lead time</td><td><code>diagnose</code></td></tr>
+      <tr><td class="num">6</td><td>Service recommendation</td><td>Ranking by what fixed similar cases beats ranking by what was tried most</td><td><code>recommend</code></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>The thread running through this series is the same as in the RAG and extraction posts: spend effort where the signals justify it, and check every output against something real. An anomaly score is the start of that work.</p>
+
+<p class="endnote">Reference code for this series will live in <code>src/app/fleet_anomaly/</code> in the <a href="https://github.com/vishalmkatkar/experiments-ml" target="_blank" rel="noopener">experiments-ml repository</a>. What breaks first in your anomaly alerts: false alarms from mode changes, too few labelled failures, or alerts nobody acts on? I'd like to hear, before Part 2.</p>
+
+</article>
+</div>
+
+<script>
+(function () {
+  // Collapse the table of contents on narrow screens.
+  var d = document.getElementById("toc-details");
+  try { if (window.matchMedia("(max-width: 1099px)").matches) d.open = false; } catch (e) {}
+
+  // Copy buttons on code blocks.
+  document.querySelectorAll("[data-copy]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var pre = btn.parentElement.querySelector("pre");
+      var text = pre.innerText;
+      function done(label) { btn.textContent = label; setTimeout(function () { btn.textContent = "Copy"; }, 1600); }
+      function selectFallback() {
+        var r = document.createRange(); r.selectNodeContents(pre);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        done("Selected");
+      }
+      try {
+        navigator.clipboard.writeText(text).then(function () { done("Copied"); }, selectFallback);
+      } catch (e) { selectFallback(); }
+    });
+  });
+})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+(function () {
+  if (!window.mermaid) return;
+  var forPrint = /[?&]print\b/.test(location.search);
+  var dark = !forPrint && document.documentElement.getAttribute("data-theme") === "dark" ||
+    (!forPrint && document.documentElement.getAttribute("data-theme") !== "light" &&
+     window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  mermaid.initialize({ startOnLoad: true, theme: dark ? "dark" : "neutral", securityLevel: "strict" });
+})();
+</script>
+</body>
+</html>

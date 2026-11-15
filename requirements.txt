@@ -1,0 +1,9 @@
+# Runtime dependencies for the examples in src/app/.
+# Not installed yet. Pin exact versions when the environment is set up, as in experiments-llm.
+#
+# fleet_anomaly
+#   pyspark          Spark in local mode (needs Java 17 or 21)
+#   mlflow           tracking, model registry, aliases
+#   scikit-learn     clustering and detectors inside Spark groups
+#   pandas, pyarrow  applyInPandas
+#   langchain-ollama, pydantic   Part 6 only: service-note normalization and work-order drafts
