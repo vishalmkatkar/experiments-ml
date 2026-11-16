@@ -1,9 +1,11 @@
 # Runtime dependencies for the examples in src/app/.
-# Not installed yet. Pin exact versions when the environment is set up, as in experiments-llm.
+# fleet_anomaly needs Java 17 or 21 for Spark (brew install openjdk@21; see src/app/fleet_anomaly/README.md).
 #
-# fleet_anomaly
-#   pyspark          Spark in local mode (needs Java 17 or 21)
-#   mlflow           tracking, model registry, aliases
-#   scikit-learn     clustering and detectors inside Spark groups
-#   pandas, pyarrow  applyInPandas
-#   langchain-ollama, pydantic   Part 6 only: service-note normalization and work-order drafts
+# Not installed yet: langchain-ollama and pydantic, for Part 6 only (service-note normalization and work-order drafts).
+
+pyspark==4.3.0         # Spark in local mode
+mlflow==3.18.0         # tracking, model registry, aliases
+scikit-learn==1.9.1    # clustering and detectors inside Spark groups (brings scipy)
+numpy==2.4.6
+pandas==2.3.3          # below 3: PySpark 4.3 warns that pandas 3 is not fully supported
+pyarrow==26.0.1        # Parquet and applyInPandas

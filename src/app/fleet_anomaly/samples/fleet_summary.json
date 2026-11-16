@@ -1,0 +1,118 @@
+{
+  "seed": 42,
+  "machines": 200,
+  "days": 365,
+  "start": "2026-01-01T00:00:00",
+  "profiles": {
+    "P1": 60,
+    "P2": 59,
+    "P3": 39,
+    "P4": 39,
+    "none": 3
+  },
+  "profile_changes": 3,
+  "telemetry_rows": 1746334,
+  "missing_hours": 5666,
+  "error_logs": 57696,
+  "error_logs_by_code": {
+    "E001": 22095,
+    "E010": 17992,
+    "E031": 7094,
+    "E050": 2217,
+    "E120": 2985,
+    "E214": 3521,
+    "E305": 528,
+    "E410": 407,
+    "E999": 857
+  },
+  "failures": 129,
+  "failures_by_mode": {
+    "bearing_wear": 44,
+    "seal_leak": 42,
+    "valve_failure": 20,
+    "winding_overheat": 23
+  },
+  "repeat_failures": 33,
+  "service_records_by_type": {
+    "inspection": 89,
+    "overhaul": 3,
+    "preventive": 709,
+    "repair": 129
+  },
+  "anomaly_windows_by_cause": {
+    "bearing_wear": 44,
+    "heat_wave": 530,
+    "post_repair_reset": 79,
+    "process_upset": 292,
+    "seal_leak": 42,
+    "sensor_glitch_dropout": 125,
+    "sensor_glitch_spike": 120,
+    "sensor_glitch_stuck": 139,
+    "valve_failure": 20,
+    "winding_overheat": 23
+  },
+  "mode_share": {
+    "down": 0.003,
+    "idle": 0.3569,
+    "normal_load": 0.426,
+    "peak": 0.1843,
+    "startup": 0.0298
+  },
+  "first_time_fix_observed": {
+    "bearing_wear/lubricate_and_recheck": {
+      "n": 21,
+      "rate": 0.429
+    },
+    "bearing_wear/realign_shaft": {
+      "n": 5,
+      "rate": 1.0
+    },
+    "bearing_wear/replace_bearing": {
+      "n": 14,
+      "rate": 0.929
+    },
+    "seal_leak/replace_pump_head": {
+      "n": 2,
+      "rate": 1.0
+    },
+    "seal_leak/replace_seal": {
+      "n": 12,
+      "rate": 0.75
+    },
+    "seal_leak/tighten_gland": {
+      "n": 20,
+      "rate": 0.45
+    },
+    "valve_failure/clear_valve": {
+      "n": 2,
+      "rate": 1.0
+    },
+    "valve_failure/replace_valve": {
+      "n": 18,
+      "rate": 1.0
+    },
+    "winding_overheat/clean_cooling_fan": {
+      "n": 13,
+      "rate": 0.692
+    },
+    "winding_overheat/reset_overload": {
+      "n": 2,
+      "rate": 0.0
+    },
+    "winding_overheat/rewind_motor": {
+      "n": 7,
+      "rate": 1.0
+    }
+  },
+  "hashes": {
+    "machines": "6303a56b05320f9d",
+    "telemetry": "4fbdedc90abd45f6",
+    "error_logs": "856c96db123131c9",
+    "failures": "1e4deb6aacd8f649",
+    "service_records": "68aa6888dc63002f",
+    "truth/machines": "bf504b4dddf1af86",
+    "truth/modes": "b53c20ab633f5bf2",
+    "truth/anomaly_windows": "2298f764491998b9",
+    "truth/failures": "bd1a0031b09a6955"
+  }
+}
