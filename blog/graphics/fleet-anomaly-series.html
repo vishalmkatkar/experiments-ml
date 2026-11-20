@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fleet anomaly series</title>
+<!-- Source for blog/fleet-anomaly-series.png (1080x1350, rendered at 2x).
+     Render: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --hide-scrollbars \
+       --window-size=1080,1350 --force-device-scale-factor=2 \
+       --screenshot=blog/fleet-anomaly-series.png blog/graphics/fleet-anomaly-series.html -->
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #5f5f5a; --line: #cfcdc4; --bg: #ffffff;
+    --band: #ecebe7; --accent: #2a74d4; --accent-bg: #e6eef9;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1350px; background: var(--bg); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink); padding: 72px 72px 56px; display: flex; flex-direction: column;
+  }
+  .kicker { font-size: 24px; font-weight: 600; color: var(--accent); letter-spacing: 0.02em; }
+  h1 { font-size: 72px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.05; margin-top: 14px; }
+  .sub { font-size: 28px; color: var(--muted); line-height: 1.35; margin-top: 20px; max-width: 900px; }
+  .parts { list-style: none; margin-top: 44px; display: flex; flex-direction: column; gap: 16px; flex: 1; }
+  .part {
+    display: flex; align-items: center; gap: 28px; padding: 0 32px; flex: 1;
+    border: 2px solid var(--line); border-radius: 16px;
+  }
+  .part.first { border-color: var(--accent); background: var(--accent-bg); border-width: 3px; }
+  .num {
+    flex: none; width: 60px; height: 60px; border-radius: 50%; border: 2px solid var(--line);
+    display: grid; place-items: center; font-size: 28px; font-weight: 700; color: var(--muted);
+  }
+  .first .num { border-color: var(--accent); color: var(--accent); background: #fff; }
+  .title { font-size: 30px; font-weight: 650; }
+  .q { font-size: 24px; color: var(--muted); margin-top: 6px; }
+  .band {
+    margin-top: 28px; background: var(--band); border: 2px solid var(--line); border-radius: 16px;
+    padding: 24px 32px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .band b { font-size: 26px; }
+  .band span { font-size: 22px; color: var(--muted); display: block; margin-top: 4px; }
+  .site { font-size: 22px; color: var(--muted); font-weight: 600; }
+</style>
+</head>
+<body>
+  <div class="kicker">A 6-PART SERIES</div>
+  <h1>Fleet anomaly detection</h1>
+  <p class="sub">From unusual sensor behavior to a failure diagnosis and a service action. Because an anomaly is not a failure.</p>
+
+  <ol class="parts">
+    <li class="part first"><div class="num">1</div><div>
+      <div class="title">Architecture: anomalies are not failures</div>
+      <div class="q">Why unusual, broken and fixable need different evidence</div></div></li>
+    <li class="part"><div class="num">2</div><div>
+      <div class="title">Machine and sensor profiles</div>
+      <div class="q">What is normal for this machine, in this mode?</div></div></li>
+    <li class="part"><div class="num">3</div><div>
+      <div class="title">Anomaly detection at scale</div>
+      <div class="q">How do you cut alerts without missing real faults?</div></div></li>
+    <li class="part"><div class="num">4</div><div>
+      <div class="title">Correlation and logs</div>
+      <div class="q">Do sensor relationships break before the values do?</div></div></li>
+    <li class="part"><div class="num">5</div><div>
+      <div class="title">Failure detection from weak labels</div>
+      <div class="q">Which past episodes does this one resemble?</div></div></li>
+    <li class="part"><div class="num">6</div><div>
+      <div class="title">Service recommendation and feedback</div>
+      <div class="q">What fixed similar cases, not what was tried most?</div></div></li>
+  </ol>
+
+  <div class="band">
+    <div><b>Apache Spark · MLflow · runnable code for every part</b>
+      <span>Tested on a 200-machine fleet with planted faults and ground truth</span></div>
+    <div class="site">ingelenz.com</div>
+  </div>
+</body>
+</html>

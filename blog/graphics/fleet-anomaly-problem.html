@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Anomaly is not failure</title>
+<!-- Source for blog/fleet-anomaly-problem.png (1080x1350, rendered at 2x). The trace is illustrative, drawn by
+     the script below, not data from the generator.
+     Render: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --hide-scrollbars \
+       --window-size=1080,1350 --force-device-scale-factor=2 \
+       --screenshot=blog/fleet-anomaly-problem.png blog/graphics/fleet-anomaly-problem.html -->
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #5f5f5a; --line: #cfcdc4; --bg: #ffffff; --band: #ecebe7;
+    --accent: #2a74d4; --alert: #d4483a; --fault-bg: #fbe8e5; --trace: #3a3a36;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1350px; background: var(--bg); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink); padding: 64px 72px 52px; display: flex; flex-direction: column;
+  }
+  .kicker { font-size: 22px; font-weight: 600; color: var(--accent); letter-spacing: 0.04em; }
+  h1 { font-size: 68px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.05; margin-top: 12px; }
+  .sub { font-size: 27px; color: var(--muted); line-height: 1.35; margin-top: 16px; }
+  .panel { margin-top: 32px; flex: 1; display: flex; flex-direction: column; justify-content: center; border: 2px solid var(--line); border-radius: 16px; padding: 22px 26px 18px; }
+  .panel-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .panel-head b { font-size: 24px; }
+  .panel-head span { font-size: 19px; color: var(--muted); }
+  svg { display: block; margin-top: 8px; }
+  svg text { font-family: inherit; }
+  .caption { font-size: 21px; color: var(--muted); line-height: 1.35; margin-top: 6px; }
+  .caption b { color: var(--ink); }
+  .facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 22px; }
+  .fact { border: 2px solid var(--line); border-radius: 16px; padding: 22px 22px; }
+  .fact b { display: block; font-size: 25px; line-height: 1.2; }
+  .fact span { display: block; font-size: 20px; color: var(--muted); line-height: 1.35; margin-top: 10px; }
+  .band {
+    margin-top: 22px; background: var(--band); border: 2px solid var(--line); border-radius: 16px;
+    padding: 20px 26px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .qs { font-size: 23px; font-weight: 600; }
+  .qs .done { color: var(--ink); }
+  .qs .open { color: var(--muted); font-weight: 500; }
+  .qs .arrow { color: var(--line); margin: 0 6px; }
+  .band small { display: block; font-size: 19px; color: var(--muted); font-weight: 400; margin-top: 6px; }
+  .site { font-size: 20px; color: var(--muted); font-weight: 600; }
+</style>
+</head>
+<body>
+  <div class="kicker">FLEET ANOMALY DETECTION · A 6-PART SERIES</div>
+  <h1>An anomaly is not a failure</h1>
+  <p class="sub">Most anomaly detection stops at a score. The questions that matter start after the alert.</p>
+
+  <div class="panel">
+    <div class="panel-head"><b>One machine, three weeks, one fleet-wide alert threshold</b><span>Illustrative</span></div>
+    <svg id="chart" width="924" height="470" viewBox="0 0 924 470"></svg>
+    <p class="caption">Every startup crosses the line. So does a sensor glitch. <b>The slow fault that ends in a
+      failure looks just like the rest.</b></p>
+  </div>
+
+  <div class="facts">
+    <div class="fact"><b>Most alerts are mode changes</b>
+      <span>Startups, peak shifts and harder-working machines look unusual against one fleet-wide normal.</span></div>
+    <div class="fact"><b>Failures are rare and logged late</b>
+      <span>A handful per machine per year, timestamped when someone noticed, not when the fault began.</span></div>
+    <div class="fact"><b>What fixed it is buried in free text</b>
+      <span>Service notes say what worked, in different words from every technician.</span></div>
+  </div>
+
+  <div class="band">
+    <div class="qs"><span class="done">Is this unusual?</span><span class="arrow">→</span><span class="open">What is going
+      wrong?</span><span class="arrow">→</span><span class="open">What should we do?</span>
+      <small>Most systems answer only the first question.</small></div>
+    <div class="site">ingelenz.com</div>
+  </div>
+
+<script>
+  // An illustrative vibration trace: weekday shifts with startup spikes, a sensor glitch,
+  // and bearing wear that builds for eight days before a failure.
+  const W = 924, H = 470, yTop = 18, bottom = 418, hours = 21 * 24;
+  const failAt = 18 * 24 + 15, wearFrom = 10 * 24 + 15;
+  const x = h => 8 + (h / hours) * (W - 16);
+  const y = v => bottom - (v / 1.35) * (bottom - yTop);
+  const noise = h => 0.025 * Math.sin(h * 12.9898) + 0.02 * Math.sin(h * 4.1414 + 1.3);
+  const values = [];
+  for (let h = 0; h < hours; h++) {
+    const day = Math.floor(h / 24), hod = h % 24, weekday = day % 7 < 5;
+    const run = weekday && hod >= 6 && hod < 22;
+    let v = run ? 0.52 : 0.18;
+    if (run && hod >= 13 && hod < 17) v += 0.13;
+    if (run && hod === 6) v += 0.4;                     // startup transient
+    if (h >= wearFrom && h < failAt) v += (run ? 0.33 : 0.12) * ((h - wearFrom) / (failAt - wearFrom)) ** 2;
+    if (h === 9 * 24 + 2) v = 1.18;                      // sensor glitch at night
+    if (h >= failAt) v = 0.04;                           // down after the failure
+    values.push(v + (h >= failAt ? 0 : noise(h)));
+  }
+  const threshold = 0.82;
+  const ns = "http://www.w3.org/2000/svg", svg = document.getElementById("chart");
+  const el = (tag, attrs, text) => {
+    const e = document.createElementNS(ns, tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    if (text) e.textContent = text;
+    svg.appendChild(e);
+    return e;
+  };
+  el("rect", { x: x(wearFrom), y: yTop - 6, width: x(failAt) - x(wearFrom), height: bottom - yTop + 6,
+               fill: "var(--fault-bg)", rx: 6 });
+  el("text", { x: x(wearFrom) + 10, y: yTop + 18, "font-size": 18, fill: "var(--alert)", "font-weight": 600 },
+     "Bearing wear builds for 8 days");
+  el("line", { x1: 0, x2: W, y1: bottom, y2: bottom, stroke: "var(--line)", "stroke-width": 2 });
+  for (let d = 0; d < 21; d += 7)
+    el("text", { x: x(d * 24) + 2, y: bottom + 26, "font-size": 17, fill: "var(--muted)" }, `Week ${d / 7 + 1}`);
+  el("polyline", { points: values.map((v, h) => `${x(h).toFixed(1)},${y(v).toFixed(1)}`).join(" "),
+                   fill: "none", stroke: "var(--trace)", "stroke-width": 1.6, "stroke-linejoin": "round" });
+  el("line", { x1: 0, x2: W, y1: y(threshold), y2: y(threshold), stroke: "var(--accent)", "stroke-width": 2,
+               "stroke-dasharray": "8 6" });
+  ["Alert", "threshold"].forEach((t, i) => el("text", { x: x(6 * 24), y: y(threshold) - 32 + i * 20, "font-size": 17,
+    fill: "var(--accent)", "font-weight": 600, "text-anchor": "middle" }, t));
+  values.forEach((v, h) => {
+    if (v > threshold && (h === 0 || values[h - 1] <= threshold))
+      el("circle", { cx: x(h), cy: y(v), r: 5.5, fill: "var(--alert)", stroke: "#fff", "stroke-width": 1.5 });
+  });
+  // Callouts.
+  const callout = (h, v, dx, dy, label) => {
+    el("line", { x1: x(h), y1: y(v) - 7, x2: x(h) + dx, y2: y(v) + dy + 6, stroke: "var(--muted)", "stroke-width": 1.2 });
+    el("text", { x: x(h) + dx + (dx < 0 ? -4 : 4), y: y(v) + dy, "font-size": 17, fill: "var(--ink)",
+                 "text-anchor": dx < 0 ? "end" : "start" }, label);
+  };
+  callout(6, values[6], 26, -34, "Startup: alert, not a fault");
+  callout(9 * 24 + 2, values[9 * 24 + 2], -18, -16, "Sensor glitch: alert");
+  el("line", { x1: x(failAt), x2: x(failAt), y1: yTop + 30, y2: bottom, stroke: "var(--alert)", "stroke-width": 2 });
+  el("text", { x: x(failAt) + 8, y: bottom - 64, "font-size": 18, fill: "var(--alert)", "font-weight": 700 }, "Failure");
+  el("text", { x: x(failAt) + 8, y: bottom - 42, "font-size": 16, fill: "var(--muted)" }, "logged");
+  el("text", { x: x(failAt) + 8, y: bottom - 22, "font-size": 16, fill: "var(--muted)" }, "2 days later");
+</script>
+</body>
+</html>
